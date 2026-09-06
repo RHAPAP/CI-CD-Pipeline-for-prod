@@ -36,7 +36,7 @@ Vagrant.configure("2") do |config|
 
   BOX_IMAGE = "bento/ubuntu-24.04"
 
-  VMS.each do |vm_info|
+  VMs.each do |vm_info|
     config.vm.define vm_info[:name] do |node|
       node.vm.box      = BOX_IMAGE
       node.vm.hostname = vm_info[:name]
