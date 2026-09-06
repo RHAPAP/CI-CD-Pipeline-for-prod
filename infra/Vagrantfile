@@ -1,0 +1,83 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# Для корректной работы с размером диска нужно поставить плагин vagrant-disksize:
+#   vagrant plugin install vagrant-disksize
+#
+
+VMs = [
+  {
+    name:   "sonarqube",
+    cpus:   2,
+    memory: 4096,
+    disk:   "20GB",
+    ip:     "192.168.56.11",
+    ssh_forward_port: 2211
+  },
+  {
+    name:   "nexus",
+    cpus:   2,
+    memory: 4096,
+    disk:   "20GB",
+    ip:     "192.168.56.12",
+    ssh_forward_port: 2212
+  },
+  {
+    name:   "jenkins",
+    cpus:   2,
+    memory: 4096,   #если у вас 32Гб+ ОЗУ на хостовом устройстве, то ставьте 8 Гб
+    disk:   "25GB",
+    ip:     "192.168.56.13",
+    ssh_forward_port: 2213
+  }
+]
+
+Vagrant.configure("2") do |config|
+
+  BOX_IMAGE = "bento/ubuntu-24.04"
+
+  VMS.each do |vm_info|
+    config.vm.define vm_info[:name] do |node|
+      node.vm.box      = BOX_IMAGE
+      node.vm.hostname = vm_info[:name]
+
+      node.vm.network "private_network", ip: vm_info[:ip]
+
+      node.vm.network "forwarded_port",
+        guest: 22,
+        host: vm_info[:ssh_forward_port],
+        id: "ssh",
+        auto_correct: true
+
+      node.vm.provider "virtualbox" do |vb|
+        vb.name   = vm_info[:name]
+        vb.cpus   = vm_info[:cpus]
+        vb.memory = vm_info[:memory]
+        vb.customize ["modifyvm", :id, "--ioapic", "on"]
+      end
+
+      if Vagrant.has_plugin?("vagrant-disksize")
+        node.disksize.size = vm_info[:disk]
+      end
+
+      node.vm.provision "shell", inline: <<-SHELL
+        set -e
+        export DEBIAN_FRONTEND=noninteractive
+
+        echo 'keyboard-configuration keyboard-configuration/layout select English (US)' | debconf-set-selections
+        echo 'keyboard-configuration keyboard-configuration/layoutcode string us' | debconf-set-selections
+        echo 'keyboard-configuration keyboard-configuration/variant select English (US)' | debconf-set-selections
+        echo 'keyboard-configuration keyboard-configuration/modelcode string pc105' | debconf-set-selections
+
+        apt-get update -y
+        apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
+        apt-get install -y net-tools curl wget vim
+
+        #vagrant:vagrant
+        sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+        systemctl restart ssh
+
+      SHELL
+    end
+  end
+end
